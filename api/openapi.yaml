@@ -1,0 +1,434 @@
+openapi: 3.1.0
+info:
+  title: jak.ma API
+  version: 1.0.0
+  description: |
+    Production API for jak.ma — a Darija-language conversational marketplace
+    matching Moroccan users to local service workers across 12 trade categories
+    and 12 metropolitan areas.
+
+    All endpoints implement the two-pass classify → constrained-generate
+    architecture described in `docs/architecture.md`. Every chat response
+    passes a deterministic verifier (see VERIFIER_SPEC.md) before reaching the
+    client.
+
+    **Contact:** sam25@mails.tsinghua.edu.cn
+    **System paper:** https://github.com/selakkad2003/jak-ma-eval-suite/blob/main/docs/architecture.md
+    **Eval suite:** https://github.com/selakkad2003/jak-ma-eval-suite
+  contact:
+    name: Sami EL AKKAD
+    email: sam25@mails.tsinghua.edu.cn
+    url: https://jak.ma
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://jak.ma/api
+    description: Production
+  - url: https://staging.jak.ma/api
+    description: Staging
+
+tags:
+  - name: chat
+    description: Two-pass conversational endpoint (classify + constrained-generate).
+  - name: workers
+    description: Direct catalog access (filtered list, lookup by ID).
+  - name: pricing
+    description: Per-trade × per-city fairness band lookup.
+  - name: eval
+    description: Verifier and 5-dimension rubric evaluation.
+  - name: health
+    description: Liveness and readiness.
+
+paths:
+
+  /health:
+    get:
+      tags: [health]
+      summary: Liveness probe
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok, degraded] }
+                  region: { type: string, example: eu-west-1 }
+                  version: { type: string, example: 1.0.0 }
+                  uptime_seconds: { type: integer }
+                  dependencies:
+                    type: object
+                    properties:
+                      mongo:  { type: string, enum: [up, down, slow] }
+                      grok:   { type: string, enum: [up, down, slow] }
+                      vision: { type: string, enum: [up, down, slow] }
+
+  /chat:
+    post:
+      tags: [chat]
+      summary: End-to-end conversational query
+      description: |
+        Runs the full pipeline: Pass 1 classify → retrieve → Pass 2 constrained
+        generate → verifier. Returns either a verified response or a
+        deterministic fallback if the verifier rejected.
+
+        Streams the Darija message via Server-Sent Events when
+        `Accept: text/event-stream`; returns a single JSON blob otherwise.
+      operationId: postChat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatRequest' }
+      responses:
+        '200':
+          description: Successful chat turn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatResponse' }
+            text/event-stream:
+              schema: { type: string, description: SSE stream of Darija tokens }
+        '400':
+          description: Malformed request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: Pass 1 schema parse failure (fell through to fallback)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatResponse' }
+        '429':
+          description: Rate limit exceeded (per-session)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /workers/search:
+    get:
+      tags: [workers]
+      summary: Filtered worker catalog query
+      description: |
+        Direct catalog access. Backs the marketing pages and the retrieval
+        layer used by `/chat`. Composite-indexed against
+        `(category, city, approved, available)`.
+      operationId: searchWorkers
+      parameters:
+        - name: category
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/TradeCategory' }
+        - name: city
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/City' }
+        - name: verified
+          in: query
+          required: false
+          schema: { type: boolean }
+        - name: featured
+          in: query
+          required: false
+          schema: { type: boolean }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 8, minimum: 1, maximum: 50 }
+      responses:
+        '200':
+          description: Worker list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workers: { type: array, items: { $ref: '#/components/schemas/Worker' } }
+                  count:   { type: integer }
+                  query_ms: { type: integer }
+
+  /workers/{worker_id}:
+    get:
+      tags: [workers]
+      summary: Worker profile by ID
+      operationId: getWorker
+      parameters:
+        - name: worker_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Worker profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Worker' }
+        '404':
+          description: No such worker
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /pricing/{category}/{city}:
+    get:
+      tags: [pricing]
+      summary: Fairness-band lookup
+      description: |
+        Returns the per-trade × per-city price band used by the verifier (V4).
+        Bands are hand-curated from a quarterly survey; the verifier accepts
+        any generated price whose midpoint lies within band ± 20%.
+      operationId: getPricing
+      parameters:
+        - name: category
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/TradeCategory' }
+        - name: city
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/City' }
+      responses:
+        '200':
+          description: Price band
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PriceBand' }
+        '404':
+          description: Unknown trade/city combination
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /eval/run:
+    post:
+      tags: [eval]
+      summary: Run the 5-dim rubric against a chat turn
+      description: |
+        Evaluates a single (query, response) pair against the rubric defined
+        in `RUBRIC.md`. Used both for offline evaluation and for production
+        spot-checks. The eval is asynchronous; poll `/eval/results/{run_id}`.
+      operationId: postEvalRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query, response]
+              properties:
+                query:    { $ref: '#/components/schemas/ChatRequest' }
+                response: { $ref: '#/components/schemas/ChatResponse' }
+                rater:    { type: string, description: Optional rater ID; if omitted, an LLM-judge run is used. }
+      responses:
+        '202':
+          description: Eval queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run_id: { type: string, format: uuid }
+                  status: { type: string, enum: [queued] }
+
+  /eval/results/{run_id}:
+    get:
+      tags: [eval]
+      summary: Fetch eval result
+      operationId: getEvalResult
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Eval complete
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvalResult' }
+        '202':
+          description: Eval still running
+        '404':
+          description: Unknown run_id
+
+components:
+  schemas:
+
+    TradeCategory:
+      type: string
+      enum:
+        - plumbing
+        - electrical
+        - tiling
+        - painting
+        - carpentry
+        - welding
+        - locksmithing
+        - ac_repair
+        - appliance_repair
+        - gardening
+        - moving
+        - cleaning
+
+    City:
+      type: string
+      enum:
+        - casablanca
+        - rabat
+        - sale
+        - fes
+        - meknes
+        - marrakech
+        - agadir
+        - tangier
+        - oujda
+        - kenitra
+        - tetouan
+        - mohammedia
+
+    Worker:
+      type: object
+      required: [worker_id, name, category, city, approved, available]
+      properties:
+        worker_id:    { type: string, format: uuid }
+        name:         { type: string, example: "Hicham B." }
+        category:     { $ref: '#/components/schemas/TradeCategory' }
+        sub_category: { type: string, nullable: true, example: "boiler_install" }
+        city:         { $ref: '#/components/schemas/City' }
+        neighborhood: { type: string, nullable: true, example: "Maarif" }
+        rating:       { type: number, format: float, minimum: 0, maximum: 5, nullable: true }
+        review_count: { type: integer, minimum: 0 }
+        approved:     { type: boolean }
+        verified:     { type: boolean }
+        featured:     { type: boolean }
+        available:    { type: boolean }
+        languages:    { type: array, items: { type: string, enum: [darija, french, arabic_msa, english] } }
+        years_experience: { type: integer, nullable: true }
+        whatsapp:     { type: string, nullable: true, description: "Phone number, never exposed in chat prose." }
+        bio_darija:   { type: string, nullable: true }
+        bio_french:   { type: string, nullable: true }
+        created_at:   { type: string, format: date-time }
+
+    ChatRequest:
+      type: object
+      required: [message, session_id]
+      properties:
+        message:    { type: string, example: "bghit chi sba9 f Casa daba" }
+        session_id: { type: string, format: uuid }
+        image:      { type: string, format: byte, nullable: true, description: "Optional base64 image (max 2MB)." }
+        locale_hint: { type: string, enum: [darija_arabic, darija_arabizi, french, mixed], nullable: true }
+        user_city_hint: { $ref: '#/components/schemas/City' }
+
+    ClassificationRecord:
+      description: Output of Pass 1.
+      type: object
+      required: [intent, trade_category, city, urgency, language]
+      properties:
+        intent:         { type: string, enum: [find_worker, ask_price, complaint, smalltalk] }
+        trade_category: { $ref: '#/components/schemas/TradeCategory' }
+        city:           { $ref: '#/components/schemas/City' }
+        urgency:        { type: string, enum: [now, today, this_week, flexible] }
+        budget_band:    { type: string, enum: [low, mid, premium, unknown] }
+        language:       { type: string, enum: [darija_arabic, darija_arabizi, french, mixed] }
+        image_evidence:
+          type: object
+          nullable: true
+          properties:
+            detected_trade: { type: string }
+            confidence:     { type: number, format: float, minimum: 0, maximum: 1 }
+
+    PriceBand:
+      type: object
+      required: [low, high, currency]
+      properties:
+        low:        { type: integer, example: 200 }
+        high:       { type: integer, example: 1200 }
+        currency:   { type: string, default: MAD }
+        confidence: { type: string, enum: [high, med, low] }
+        urgent_premium: { type: number, format: float, example: 1.4, description: Multiplier applied for `urgency = now`. }
+        survey_date:    { type: string, format: date }
+
+    VerifierResult:
+      type: object
+      required: [passed, failed_checks, score]
+      properties:
+        passed:        { type: boolean }
+        failed_checks: { type: array, items: { type: string, enum: [V1_schema, V2_grounding, V3_city, V4_price, V5_script, V6_toxicity] } }
+        score:         { type: number, format: float, minimum: 0, maximum: 1 }
+        ms:            { type: integer, description: Time spent in verifier (always < 10). }
+
+    ChatResponse:
+      description: Output of the full pipeline (verifier-passed or fallback).
+      type: object
+      required: [classification, workers_to_show, message_darija, verifier, latency_ms]
+      properties:
+        classification:  { $ref: '#/components/schemas/ClassificationRecord' }
+        workers_to_show:
+          type: array
+          items:
+            type: object
+            required: [worker_id, highlight_reason]
+            properties:
+              worker_id:        { type: string, format: uuid }
+              highlight_reason: { type: string }
+        message_darija:  { type: string, description: User-facing Darija message. }
+        price_band_mad:  { $ref: '#/components/schemas/PriceBand' }
+        urgency_note:    { type: string, nullable: true }
+        follow_up_questions: { type: array, items: { type: string } }
+        verifier:        { $ref: '#/components/schemas/VerifierResult' }
+        used_fallback:   { type: boolean, description: True if the verifier rejected and the deterministic fallback ran. }
+        latency_ms:
+          type: object
+          properties:
+            pass1:    { type: integer }
+            retrieval:{ type: integer }
+            pass2:    { type: integer }
+            verifier: { type: integer }
+            total:    { type: integer }
+        cost_usd:
+          type: number
+          format: float
+          example: 0.0008
+
+    EvalDimension:
+      type: object
+      required: [name, score]
+      properties:
+        name:      { type: string, enum: [factuality, naturalness, trade_fit, price_fairness, geographic] }
+        score:     { type: integer, minimum: 0, maximum: 4 }
+        rationale: { type: string, nullable: true }
+
+    EvalResult:
+      type: object
+      required: [run_id, status, dimensions, aggregate]
+      properties:
+        run_id:     { type: string, format: uuid }
+        status:     { type: string, enum: [queued, running, complete, failed] }
+        dimensions: { type: array, items: { $ref: '#/components/schemas/EvalDimension' } }
+        aggregate:  { type: number, format: float, minimum: 0, maximum: 4 }
+        rater:      { type: string, description: "Human rater ID or 'llm-judge'." }
+        completed_at: { type: string, format: date-time, nullable: true }
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:    { type: string }
+        message: { type: string }
+        details: { type: object, nullable: true }
+
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: header
+      name: X-Session-Id
+      description: |
+        jak.ma does not require user accounts. A `session_id` (UUID) is
+        generated client-side and persisted in localStorage. It serves as
+        rate-limit key and eval-set partition; it is not a credential.
+
+security:
+  - sessionAuth: []
