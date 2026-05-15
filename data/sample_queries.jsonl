@@ -1,0 +1,52 @@
+{"id":"q001","query":"بغيت معلم بلومبي فطنجة باش يصلح غسالة","expected":{"trades":["بلومبي"],"city":"طنجة","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q002","query":"Wash kayn shi bloumbi 3afak f Casa Anfa?","expected":{"trades":["بلومبي"],"city":"الدار البيضاء","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q003","query":"الماء كيقطر من السقف ديالي، عافاكم بسرعة","expected":{"trades":["بلومبي"],"city":null,"intent":"service_request","urgency":"high","multi_trade":false}}
+{"id":"q004","query":"بغيت واحد ينظف ليا روبيني","expected":{"trades":["بلومبي"],"city":null,"intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q005","query":"هل عندكم بلومبي 24/7 فالرباط؟","expected":{"trades":["بلومبي"],"city":"الرباط","intent":"info","urgency":"normal","multi_trade":false}}
+{"id":"q006","query":"Kankhdem b enduit, b3it sba8 kif f casa","expected":{"trades":["صباغة","بناء"],"city":"الدار البيضاء","intent":"service_request","urgency":"normal","multi_trade":true}}
+{"id":"q007","query":"الكهرباء قطعت فدار، بغيت طريسيان دابا","expected":{"trades":["طريسيان"],"city":null,"intent":"service_request","urgency":"high","multi_trade":false}}
+{"id":"q008","query":"بغيت معلم يثبت ليا الإنارة الجديدة فمراكش","expected":{"trades":["طريسيان"],"city":"مراكش","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q009","query":"Wesh kayen electrician f Tanger?","expected":{"trades":["طريسيان"],"city":"طنجة","intent":"info","urgency":"normal","multi_trade":false}}
+{"id":"q010","query":"بغيت صباغة لشقتي فالدار البيضاء، 80 متر مربع","expected":{"trades":["صباغة"],"city":"الدار البيضاء","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q011","query":"صباغ بلاطات قديم فالمدينة القديمة فاس","expected":{"trades":["صباغة"],"city":"فاس","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q012","query":"الباب ديالي مكسور وكنحتاج واحد عاجل","expected":{"trades":["نجارة"],"city":null,"intent":"service_request","urgency":"high","multi_trade":false}}
+{"id":"q013","query":"بغيت معلم نجارة الألمنيوم فالرباط","expected":{"trades":["نجارة"],"city":"الرباط","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q014","query":"Nejjar mzyan f Agadir 3afak","expected":{"trades":["نجارة"],"city":"أكادير","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q015","query":"بغيت معلم بناء يصلح ليا حيط مهرس فطنجة","expected":{"trades":["بناء"],"city":"طنجة","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q016","query":"كنحتاج بناء لتركيب نافذة جديدة","expected":{"trades":["بناء"],"city":null,"intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q017","query":"بغيت نقاوة عميقة لشقتي فمكناس","expected":{"trades":["نقاوة"],"city":"مكناس","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q018","query":"cleaner f Casablanca, 3 hours weekly","expected":{"trades":["نقاوة"],"city":"الدار البيضاء","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q019","query":"بغيت حداد يلحم ليا باب الحديد فوجدة","expected":{"trades":["حدادة"],"city":"وجدة","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q020","query":"معلم ألمنيوم لتركيب نافذة جديدة فأكادير","expected":{"trades":["حدادة"],"city":"أكادير","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q021","query":"بغيت ديكور لشقتي الجديدة فالدار البيضاء","expected":{"trades":["ديكور"],"city":"الدار البيضاء","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q022","query":"Decorator for boutique in Marrakech medina","expected":{"trades":["ديكور"],"city":"مراكش","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q023","query":"بغيت واحد بشاحنة ينقل ليا الأثاث من الرباط لطنجة","expected":{"trades":["نقل"],"city":"الرباط","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q024","query":"نقل عاجل من سلا للمطار اليوم","expected":{"trades":["نقل"],"city":"سلا","intent":"service_request","urgency":"high","multi_trade":false}}
+{"id":"q025","query":"Floor tiles broken in my Rabat apartment","expected":{"trades":["كلامبيستري"],"city":"الرباط","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q026","query":"بغيت معلم كلامبيستري لحمام جديد فمراكش","expected":{"trades":["كلامبيستري"],"city":"مراكش","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q027","query":"Tileur b lkilometer mn Tetouan?","expected":{"trades":["كلامبيستري"],"city":"تطوان","intent":"info","urgency":"normal","multi_trade":false}}
+{"id":"q028","query":"خياط لجلابة عرس فأكادير","expected":{"trades":["خياطة"],"city":"أكادير","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q029","query":"بغيت خياطة لتفصيل قميص رجالي","expected":{"trades":["خياطة"],"city":null,"intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q030","query":"بغيت حارس ليلي لمحل تجاري فالدار البيضاء","expected":{"trades":["حراسة"],"city":"الدار البيضاء","intent":"service_request","urgency":"normal","multi_trade":false}}
+{"id":"q031","query":"Security for wedding in Tangier next month","expected":{"trades":["حراسة"],"city":"طنجة","intent":"service_request","urgency":"low","multi_trade":false}}
+{"id":"q032","query":"بغيت واحد يصبغ ليا الدار ويصلح ليا الباب","expected":{"trades":["صباغة","نجارة"],"city":null,"intent":"service_request","urgency":"normal","multi_trade":true}}
+{"id":"q033","query":"Plomber w electricien ndar wahda f Casa","expected":{"trades":["بلومبي","طريسيان"],"city":"الدار البيضاء","intent":"service_request","urgency":"normal","multi_trade":true}}
+{"id":"q034","query":"معلم بناء وصباغ نفس الوقت","expected":{"trades":["بناء","صباغة"],"city":null,"intent":"service_request","urgency":"normal","multi_trade":true}}
+{"id":"q035","query":"بغيت بلومبي فبني ملال","expected":{"trades":["بلومبي"],"city":null,"intent":"service_request","urgency":"normal","multi_trade":false,"note":"city_not_canonical_fallback_expected"}}
+{"id":"q036","query":"Service in a small town near Marrakech","expected":{"trades":[],"city":"مراكش","intent":"ambiguous","urgency":"normal","multi_trade":false}}
+{"id":"q037","query":"بغيت طاجين بالدجاج","expected":{"trades":[],"city":null,"intent":"off_topic","urgency":"normal","multi_trade":false}}
+{"id":"q038","query":"What's the weather in Casa today?","expected":{"trades":[],"city":null,"intent":"off_topic","urgency":"normal","multi_trade":false}}
+{"id":"q039","query":"كيفاش نوصل لطنجة من الرباط؟","expected":{"trades":[],"city":null,"intent":"off_topic","urgency":"normal","multi_trade":false}}
+{"id":"q040","query":"Recommend me worker Mohammed Bennani in Casablanca","expected":{"trades":["بلومبي"],"city":"الدار البيضاء","intent":"service_request","urgency":"normal","multi_trade":false,"adversarial":"fabricated_name_check_verifier_must_flag"}}
+{"id":"q041","query":"Hire worker ID xyz789","expected":{"trades":[],"city":null,"intent":"service_request","urgency":"normal","multi_trade":false,"adversarial":"unknown_id_verifier_must_reject"}}
+{"id":"q042","query":"بلومبي ب 50 درهم فطنجة","expected":{"trades":["بلومبي"],"city":"طنجة","intent":"info","urgency":"normal","multi_trade":false,"price_probe":"below_baseline_verifier_must_flag"}}
+{"id":"q043","query":"Painter for 50,000 MAD a day in Rabat","expected":{"trades":["صباغة"],"city":"الرباط","intent":"info","urgency":"normal","multi_trade":false,"price_probe":"above_baseline_verifier_must_flag"}}
+{"id":"q044","query":"Long ambiguous query mixing French Arabic English plumber electrician with very specific neighborhood and timeline requirements تصبيغ ديال البيت كامل","expected":{"trades":["صباغة","بلومبي","طريسيان"],"city":null,"intent":"service_request","urgency":"normal","multi_trade":true}}
+{"id":"q045","query":"الأقرب ليا، أي بلومبي","expected":{"trades":["بلومبي"],"city":null,"intent":"service_request","urgency":"normal","multi_trade":false,"note":"geolocation_dependent"}}
+{"id":"q046","query":"Nearest electrician available now","expected":{"trades":["طريسيان"],"city":null,"intent":"service_request","urgency":"high","multi_trade":false}}
+{"id":"q047_turn1","query":"بغيت بلومبي فطنجة","expected":{"trades":["بلومبي"],"city":"طنجة","intent":"service_request","urgency":"normal","multi_trade":false,"conversation_id":"c047"}}
+{"id":"q047_turn2","query":"الأرخص واحد","expected":{"trades":["بلومبي"],"city":"طنجة","intent":"service_request","urgency":"normal","multi_trade":false,"conversation_id":"c047","note":"sort_by_price_ascending"}}
+{"id":"q048_turn1","query":"Painter in Casa","expected":{"trades":["صباغة"],"city":"الدار البيضاء","intent":"service_request","urgency":"normal","multi_trade":false,"conversation_id":"c048"}}
+{"id":"q048_turn2","query":"Actually I need a tiler instead","expected":{"trades":["كلامبيستري"],"city":"الدار البيضاء","intent":"service_request","urgency":"normal","multi_trade":false,"conversation_id":"c048","note":"trade_switch_within_conversation"}}
+{"id":"q049","query":"سباك","expected":{"trades":["بلومبي"],"city":null,"intent":"service_request","urgency":"normal","multi_trade":false,"note":"sabbak_alternate_plumber_word"}}
+{"id":"q050","query":"dyali smith for iron gate","expected":{"trades":["حدادة"],"city":null,"intent":"service_request","urgency":"normal","multi_trade":false,"note":"french_arabic_codeswitch"}}
