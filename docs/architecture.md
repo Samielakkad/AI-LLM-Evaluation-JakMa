@@ -1,7 +1,7 @@
 # jak.ma: Verifier-Gated Retrieval for a Low-Resource Conversational Marketplace
 
 **Sami EL AKKAD** — Tsinghua SIGS, AI MSc — sam25@mails.tsinghua.edu.cn
-Production system: [jak.ma](https://jak.ma) · Source companion: [jak-ma-eval-suite](https://github.com/selakkad2003/jak-ma-eval-suite)
+Production system: [jak.ma](https://jak.ma) · Source companion: [jak-ma-eval-suite](https://github.com/Samielakkad/jak-ma-eval-suite)
 
 ---
 
@@ -153,7 +153,7 @@ The verifier is deterministic Python (no LLM calls inside). The full check set:
 - **V5 — Script purity.** `message_darija` is checked against a regex that disallows Latin-script transliteration in the user-facing string unless the user's `language` was `mixed` or `darija_arabizi`.
 - **V6 — Toxicity / PII.** Quick check against a small blocklist of slurs and PII patterns (phone numbers in the user-facing message — these should come only via the worker's structured contact card, not in prose).
 
-The verifier produces a structured `VerifierResult` (`passed: bool`, `failed_checks: list[str]`, `score: float`). The full spec is in [VERIFIER_SPEC.md](https://github.com/selakkad2003/jak-ma-eval-suite/blob/main/VERIFIER_SPEC.md) in the eval suite.
+The verifier produces a structured `VerifierResult` (`passed: bool`, `failed_checks: list[str]`, `score: float`). The full spec is in [VERIFIER_SPEC.md](https://github.com/Samielakkad/jak-ma-eval-suite/blob/main/VERIFIER_SPEC.md) in the eval suite.
 
 ### Production rejection rate
 
@@ -233,7 +233,7 @@ A client-side classifier (MobileNetV3 in TensorFlow.js, browser-resident, ~250ms
 
 ## 9. Evaluation
 
-The eval suite is described in [jak-ma-eval-suite/docs/methodology.md](https://github.com/selakkad2003/jak-ma-eval-suite/blob/main/docs/methodology.md). Five dimensions, each scored 0–4 by calibrated raters against a 100-query Darija test set:
+The eval suite is described in [jak-ma-eval-suite/docs/methodology.md](https://github.com/Samielakkad/jak-ma-eval-suite/blob/main/docs/methodology.md). Five dimensions, each scored 0–4 by calibrated raters against a 100-query Darija test set:
 
 - **Factuality** — Does the response correctly reflect the retrieved workers?
 - **Naturalness** — Is the Darija idiomatic? Would a Moroccan reader find it natural?
@@ -241,7 +241,7 @@ The eval suite is described in [jak-ma-eval-suite/docs/methodology.md](https://g
 - **Price-fairness** — Is the price band within the local fairness range?
 - **Geographic** — Are the recommended workers actually reachable for this user?
 
-Calibration: rater training uses a 20-query anchor set with reference scores. Inter-rater Krippendorff's α target is 0.7. The protocol mirrors the methodology applied in the Baidu ERNIE Mentor Program (October–December 2025) and is documented in [ernie-evaluation-notes](https://github.com/selakkad2003/ernie-evaluation-notes).
+Calibration: rater training uses a 20-query anchor set with reference scores. Inter-rater Krippendorff's α target is 0.7. The protocol mirrors the methodology applied in the Baidu ERNIE Mentor Program (October–December 2025) and is documented in [ernie-evaluation-notes](https://github.com/Samielakkad/ernie-evaluation-notes).
 
 Production calibration: we run the eval-suite weekly against a stratified sample of production queries (PII-scrubbed). When aggregate score drops below 3.5 on any dimension, we cut a release-gate ticket.
 
@@ -315,11 +315,11 @@ In rough priority order:
 
 ## 13. References & companion repos
 
-- **[jak-ma-eval-suite](https://github.com/selakkad2003/jak-ma-eval-suite)** — Verifier spec, prompts, sample queries, eval runner, methodology docs, latency budget, cost model.
-- **[jak-ma-case-study](https://github.com/selakkad2003/jak-ma-case-study)** — Production narrative: decisions, tradeoffs, what broke.
-- **[pm-frameworks-darija](https://github.com/selakkad2003/pm-frameworks-darija)** — Pricing taxonomy, evaluation rubric, calibration protocol, verifier philosophy — reusable across Darija NLP projects.
-- **[ernie-evaluation-notes](https://github.com/selakkad2003/ernie-evaluation-notes)** — Evaluation methodology from the Baidu ERNIE Mentor Program, where the rater-calibration protocol used here was first applied.
-- **[darija-nlp-resources](https://github.com/selakkad2003/darija-nlp-resources)** — Public corpora, papers, and tools for Moroccan-Arabic NLP.
+- **[jak-ma-eval-suite](https://github.com/Samielakkad/jak-ma-eval-suite)** — Verifier spec, prompts, sample queries, eval runner, methodology docs, latency budget, cost model.
+- **[jak-ma-case-study](https://github.com/Samielakkad/jak-ma-case-study)** — Production narrative: decisions, tradeoffs, what broke.
+- **[pm-frameworks-darija](https://github.com/Samielakkad/pm-frameworks-darija)** — Pricing taxonomy, evaluation rubric, calibration protocol, verifier philosophy — reusable across Darija NLP projects.
+- **[ernie-evaluation-notes](https://github.com/Samielakkad/ernie-evaluation-notes)** — Evaluation methodology from the Baidu ERNIE Mentor Program, where the rater-calibration protocol used here was first applied.
+- **[darija-nlp-resources](https://github.com/Samielakkad/darija-nlp-resources)** — Public corpora, papers, and tools for Moroccan-Arabic NLP.
 
 ---
 
