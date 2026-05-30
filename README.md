@@ -137,3 +137,8 @@ MIT for code. CC-BY-4.0 for documentation and rubric. See [`LICENSE`](LICENSE).
 ---
 
 **Sami EL AKKAD** · Tsinghua SIGS AI MSc · sam25@mails.tsinghua.edu.cn
+
+
+---
+
+**License — All rights reserved.** This repository is shared for review only. Please **contact me before using any part of it** for any purpose. See [LICENSE](LICENSE).
