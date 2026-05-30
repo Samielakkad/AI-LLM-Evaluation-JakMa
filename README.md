@@ -1,4 +1,4 @@
-# jak-ma-eval-suite
+# AI + LLM Evaluation · jak-ma-eval-suite
 
 > Evaluation methodology, rubric, and reproducible test harness for the **two-pass grounded retrieval system at [jak.ma](https://jak.ma)** — a live Darija marketplace with 1,996 verified workers across 12 trades and 11 Moroccan cities.
 
