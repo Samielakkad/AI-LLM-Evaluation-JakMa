@@ -10,9 +10,9 @@
 
 ## What this repo is
 
-The **eval suite** for jak.ma's production AI architecture. Not a demo. Not a toy. The exact rubric, prompt set, and verifier methodology used to release-gate every grounded-retrieval deployment to production.
+The **eval suite** for jak.ma's production AI architecture — the exact rubric, prompt set, and verifier methodology used to release-gate every grounded-retrieval deployment to production.
 
-If you're a Microsoft / NVIDIA / MSRA researcher reading this to assess my work — start with [`RUBRIC.md`](RUBRIC.md) for the 5-dim eval methodology and [`DARIJA_QUERY_SET.md`](DARIJA_QUERY_SET.md) for the representative test prompts. Then hit `https://jak.ma/api/health` to confirm the production system flags align with what we evaluate.
+Start with [`RUBRIC.md`](RUBRIC.md) for the 5-dim eval methodology and [`DARIJA_QUERY_SET.md`](DARIJA_QUERY_SET.md) for the representative test prompts. `https://jak.ma/api/health` exposes the production flags that this suite evaluates against.
 
 ## What jak.ma's AI does
 
