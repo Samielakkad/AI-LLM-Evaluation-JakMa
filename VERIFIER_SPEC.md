@@ -221,12 +221,14 @@ This spec is versioned at the top of `lib/grounded-retrieval.js` as `VERIFIER_SP
 
 ## 11. Testing
 
-`tests/verifier.test.js` includes:
-- 50 queries that should pass cleanly (`ok: true, score = 1.0`)
-- 25 adversarial queries designed to fail each rule (`cited_id_not_in_candidates`, `fabricated_phone_number`, etc.)
-- 10 edge cases (empty response, response with only the `<<WORKERS:>>` marker, response with no marker at all)
+The standalone Python suite includes:
+- `tests/test_verifier.py` — cited IDs, phone numbers, exact URL hosts, proper nouns, and price baselines
+- `tests/test_candidate_data.py` — per-query candidate schema and duplicate-ID checks
+- `tests/test_response_parser.py` — plain text, structured JSON, SSE, nested Pass 1 objects, and mocked HTTP transport
+- `tests/test_scoring.py` — end-to-end dimension propagation
 
-All tests must pass before deploy. Current pass rate: **100%** (May 2026).
+Run `python -m unittest discover -s tests -v`. CI runs the suite on Python
+3.10 and 3.13 together with `ruff check scripts tests`.
 
 ---
 
@@ -235,7 +237,7 @@ All tests must pass before deploy. Current pass rate: **100%** (May 2026).
 Without a verifier, "grounded retrieval" is a brochure phrase. With this spec, anyone reading this repo can:
 
 1. **Audit the rules.** Every constraint is explicit code, not vibes.
-2. **Reproduce the eval.** Run `tests/verifier.test.js` against your own grounded-retrieval system.
+2. **Reproduce the eval.** Run the standalone Python suite against your own grounded-retrieval system.
 3. **Catch regressions.** If a future deploy introduces a fabrication path the verifier doesn't catch, file an issue with the failure case, and we add a hard rule.
 
 The verifier is the contract between the model and the user. The user's contract with the model is: "any worker you recommend exists, and any phone number you give me works." This spec is how we keep that contract.

@@ -102,7 +102,7 @@ Historical baselines:
 python scripts/run_eval.py \
     --endpoint https://jak.ma/api/ai/chat \
     --test-set data/sample_queries.jsonl \
-    --rubric RUBRIC.md \
+    --candidates /secure/path/candidates.json \
     --output results.json
 ```
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from urllib.parse import urlsplit
 
-
 PHONE_REGEX = re.compile(r"\b0[567]\d{8}\b")
 URL_REGEX = re.compile(r"(?i)\b(?:https?://|whatsapp://)[^\s<>\"']+")
 PROPER_NOUN_REGEX = re.compile(r"\b[A-Z][a-z]{2,}\b")

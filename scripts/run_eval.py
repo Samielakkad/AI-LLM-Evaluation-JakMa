@@ -6,6 +6,7 @@ Usage:
     python scripts/run_eval.py \\
         --endpoint https://jak.ma/api/ai/chat \\
         --test-set data/sample_queries.jsonl \\
+        --candidates /secure/path/candidates.json \\
         --output results.json
 
 The endpoint must accept:
@@ -21,26 +22,27 @@ This script:
     6. Outputs aggregate score + per-dimension breakdown
 
 Dependencies:
-    pip install httpx tqdm pyarrow
+    pip install -r requirements.txt
 
 Sami EL AKKAD · sam25@mails.tsinghua.edu.cn
 """
 
 import argparse
 import json
-import re
 import statistics
 import sys
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
 
 if __package__:
     from .candidate_data import CandidateDataError, load_candidate_sets
+    from .response_parser import ResponseParseError, parse_endpoint_response
     from .verifier import verify_grounding
 else:
     from candidate_data import CandidateDataError, load_candidate_sets
+    from response_parser import ResponseParseError, parse_endpoint_response
     from verifier import verify_grounding
 
 try:
@@ -79,42 +81,50 @@ class QueryResult:
 # Endpoint client
 # -------------------------------------------------------------------
 
-WORKERS_MARKER = re.compile(r"<<WORKERS:([^>]*)>>")
-
-
-def call_endpoint(endpoint: str, query: str, conversation_id: Optional[str] = None,
-                  timeout: float = 30.0) -> tuple[str, list[str], dict, float]:
+def call_endpoint(
+    endpoint: str,
+    query: str,
+    conversation_id: Optional[str] = None,
+    timeout: float = 30.0,
+    client: Optional[httpx.Client] = None,
+) -> tuple[str, list[str], dict, float]:
     """Returns (response_text, cited_ids, pass1_result, duration_ms)."""
     started = time.monotonic()
     payload = {"query": query, "conversation_id": conversation_id}
 
-    with httpx.Client(timeout=timeout) as client:
+    def post(active_client: httpx.Client) -> httpx.Response:
         try:
-            r = client.post(endpoint, json=payload)
-            r.raise_for_status()
-            text = r.text
+            response = active_client.post(
+                endpoint,
+                json=payload,
+                headers={"Accept": "application/json, text/event-stream"},
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            return response
         except httpx.HTTPError as e:
             raise RuntimeError(f"Endpoint error: {e}")
 
+    if client is None:
+        with httpx.Client() as owned_client:
+            response = post(owned_client)
+    else:
+        response = post(client)
+
     duration_ms = (time.monotonic() - started) * 1000
+    try:
+        parsed = parse_endpoint_response(
+            response.text, response.headers.get("content-type", "")
+        )
+    except ResponseParseError as error:
+        raise RuntimeError(f"Endpoint response error: {error}") from error
 
-    marker = WORKERS_MARKER.search(text)
-    cited_ids = []
-    if marker:
-        ids_raw = marker.group(1).strip()
-        cited_ids = [s.strip() for s in ids_raw.split(",") if s.strip()]
-        text = text[:marker.start()].strip()
-
-    # Try to extract Pass 1 from a JSON envelope if the endpoint exposes it
-    pass1_result = {}
-    pass1_match = re.search(r'"pass1":\s*({[^}]+})', r.text)
-    if pass1_match:
-        try:
-            pass1_result = json.loads(pass1_match.group(1))
-        except json.JSONDecodeError:
-            pass
-
-    return text, cited_ids, pass1_result, duration_ms
+    return (
+        parsed.response_text,
+        parsed.cited_ids,
+        parsed.pass1_result,
+        duration_ms,
+    )
 
 
 # -------------------------------------------------------------------
@@ -206,7 +216,7 @@ def main():
         sys.exit(1)
 
     queries = []
-    with test_path.open() as f:
+    with test_path.open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -229,21 +239,24 @@ def main():
 
     results = []
     latencies = []
-    for q in tqdm(queries):
-        try:
-            response_text, cited_ids, pass1, duration_ms = call_endpoint(args.endpoint, q.query)
-            q.response_text = response_text
-            q.cited_ids = cited_ids
-            q.pass1_result = pass1
-            q.duration_ms = duration_ms
-            latencies.append(duration_ms)
-        except Exception as e:
-            q.error = str(e)
-            results.append(q)
-            continue
+    with httpx.Client() as client:
+        for q in tqdm(queries):
+            try:
+                response_text, cited_ids, pass1, duration_ms = call_endpoint(
+                    args.endpoint, q.query, client=client
+                )
+                q.response_text = response_text
+                q.cited_ids = cited_ids
+                q.pass1_result = pass1
+                q.duration_ms = duration_ms
+                latencies.append(duration_ms)
+            except Exception as e:
+                q.error = str(e)
+                results.append(q)
+                continue
 
-        q = score_response(q, candidates=candidate_sets[q.id])
-        results.append(q)
+            q = score_response(q, candidates=candidate_sets[q.id])
+            results.append(q)
 
     # Aggregate
     successful = [r for r in results if not r.error]
@@ -281,11 +294,11 @@ def main():
         "results": [asdict(r) for r in results],
     }
 
-    with open(args.output, "w") as f:
+    with open(args.output, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
     print()
-    print(f"=== jak.ma 5-dim eval summary ===")
+    print("=== jak.ma 5-dim eval summary ===")
     print(f"  Aggregate:           {summary['aggregate']}")
     print(f"  Factuality:          {summary['dimensions']['factuality']}")
     print(f"  Naturalness:         {summary['dimensions']['naturalness']}")

@@ -5,6 +5,7 @@
 [![Production](https://img.shields.io/badge/live-jak.ma-brightgreen)](https://jak.ma)
 [![Health](https://img.shields.io/badge/api%2Fhealth-grounded__retrieval%3Atrue-blue)](https://jak.ma/api/health)
 [![Workers](https://img.shields.io/badge/workers-1%2C996-orange)](https://jak.ma)
+[![CI](https://github.com/Samielakkad/AI-LLM-Evaluation-JakMa/actions/workflows/ci.yml/badge.svg)](https://github.com/Samielakkad/AI-LLM-Evaluation-JakMa/actions/workflows/ci.yml)
 
 ---
 
@@ -43,13 +44,47 @@ See [`RUBRIC.md`](RUBRIC.md) for the full scoring math.
 ## Quickstart — run the eval against the live jak.ma endpoint
 
 ```bash
-git clone https://github.com/[your-username]/jak-ma-eval-suite
-cd jak-ma-eval-suite
-# Test scripts are under development — for now, this repo is the methodology + rubric.
-# Implementation lives in the main jak.ma project (lib/grounded-retrieval.js + tests/).
+git clone https://github.com/Samielakkad/AI-LLM-Evaluation-JakMa.git
+cd AI-LLM-Evaluation-JakMa
+python -m pip install -r requirements.txt
+
+python scripts/run_eval.py \
+  --endpoint https://jak.ma/api/ai/chat \
+  --test-set data/sample_queries.jsonl \
+  --candidates /secure/path/candidates.json \
+  --output results.json
 ```
 
-Expected output once the standalone runner ships (May 2026 baseline):
+The candidate file is a JSON object keyed by test query ID. Every query being
+evaluated must have an entry; an empty array is valid when retrieval returned
+no workers. Candidate IDs must be unique within a query.
+
+```json
+{
+  "q001": [
+    {
+      "id": "worker-1",
+      "name": "Example Worker",
+      "trade": "بلومبي",
+      "secondary_trades": [],
+      "city": "طنجة",
+      "price_range": {"min": 210, "max": 320, "unit": "day"}
+    }
+  ]
+}
+```
+
+Candidate snapshots can contain contact data. Keep them outside the repository
+and pass their path at runtime.
+
+The endpoint may return the terminal `<<WORKERS:...>>` contract as plain text
+or SSE, or the structured JSON contract in `api/openapi.yaml`. Nested Pass 1
+objects are preserved without regex extraction. Conflicting or missing worker
+declarations are recorded as response errors rather than silently scored.
+
+The runner prints a summary and writes the per-query details to the requested
+UTF-8 JSON file. The historical May 2026 production baseline was:
+
 ```
 === jak.ma production eval ===
 Test set: 50 Darija queries (Arabic + Arabizi mix)
@@ -97,15 +132,33 @@ This matters for jak.ma specifically because a customer might call a phone numbe
 
 At current jak.ma traffic (~5,000 chat queries/month), total AI cost: **~$0.22/month**. Below the noise floor of the $20/month total infra budget.
 
-## Repo structure (current + planned)
+## Repo structure
 
 ```
-jak-ma-eval-suite/
+AI-LLM-Evaluation-JakMa/
+├── .github/workflows/ci.yml   # Python 3.10/3.13 lint + test gate
 ├── README.md                  # this file
 ├── RUBRIC.md                  # 5-dim eval methodology in depth
 ├── DARIJA_QUERY_SET.md        # 50 representative Pass 1 + Pass 2 test prompts
+├── scripts/
+│   ├── run_eval.py            # CLI + endpoint client + aggregate scoring
+│   ├── candidate_data.py      # per-query candidate schema validation
+│   ├── response_parser.py     # JSON / SSE / plain-text contract parser
+│   └── verifier.py            # deterministic grounding checks
+├── tests/                     # offline unit and transport tests
+├── requirements.txt           # runtime dependencies
+├── requirements-dev.txt       # reproducible lint tooling
+├── pyproject.toml              # lint configuration
 ├── LICENSE
-└── (more coming — scripts/, tests/, prompts/)
+└── prompts/                    # Pass 1, Pass 2, and price prompts
+```
+
+Run the same checks as CI locally:
+
+```bash
+python -m pip install -r requirements-dev.txt
+ruff check scripts tests
+python -m unittest discover -s tests -v
 ```
 
 ## Contributing
@@ -132,13 +185,9 @@ For sensitive issues (security, PII), email `sam25@mails.tsinghua.edu.cn` direct
 
 ## License
 
-MIT for code. CC-BY-4.0 for documentation and rubric. See [`LICENSE`](LICENSE).
+All rights reserved. Public visibility grants review and reference access only;
+reuse requires the author's prior written permission. See [`LICENSE`](LICENSE).
 
 ---
 
 **Sami EL AKKAD** · Tsinghua SIGS AI MSc · sam25@mails.tsinghua.edu.cn
-
-
----
-
-**License — All rights reserved.** This repository is shared for review only. Please **contact me before using any part of it** for any purpose. See [LICENSE](LICENSE).

@@ -2,7 +2,6 @@ import unittest
 
 from scripts.verifier import verify_grounding
 
-
 CANDIDATES = [
     {
         "id": "worker-1",
