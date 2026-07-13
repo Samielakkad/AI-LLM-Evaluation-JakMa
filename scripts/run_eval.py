@@ -36,6 +36,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
+from verifier import verify_grounding
+
 try:
     import httpx
     from tqdm import tqdm
@@ -108,63 +110,6 @@ def call_endpoint(endpoint: str, query: str, conversation_id: Optional[str] = No
             pass
 
     return text, cited_ids, pass1_result, duration_ms
-
-
-# -------------------------------------------------------------------
-# Verifier (deterministic, port of lib/grounded-retrieval.js verifier)
-# -------------------------------------------------------------------
-
-PHONE_REGEX = re.compile(r"\b0[567]\d{8}\b")
-PRICE_REGEX = re.compile(r"\b(\d{2,5})\s*(MAD|DH|درهم|dh)\b")
-URL_REGEX = re.compile(r"https?://[^\s]+")
-PROPER_NOUN_REGEX = re.compile(r"\b[A-Z][a-z]{2,}\b")
-
-URL_WHITELIST = {"jak.ma", "wa.me", "whatsapp"}
-DARIJA_COMMON_TERMS = {
-    "plumber", "electrician", "painter", "carpenter", "specialist",
-    "professional", "available", "contact", "casablanca", "rabat",
-    "tangier", "marrakech", "fes", "agadir", "oujda", "meknes", "sale",
-    "tetouan",
-}
-
-
-def verify_grounding(response_text: str, cited_ids: list[str],
-                     candidates: list[dict]) -> tuple[bool, float, list[dict]]:
-    violations = []
-    score = 1.0
-
-    candidate_id_set = {c["id"] for c in candidates}
-    candidate_phones = {c.get("phone", "") for c in candidates if c.get("phone")}
-    candidate_names = set()
-    for c in candidates:
-        for piece in c["name"].split():
-            candidate_names.add(piece)
-
-    # Hard: cited_id not in candidates
-    for cid in cited_ids:
-        if cid not in candidate_id_set:
-            violations.append({"type": "cited_id_not_in_candidates", "severity": "hard", "detail": cid})
-            return False, 0.0, violations
-
-    # Hard: fabricated phone numbers
-    for phone in PHONE_REGEX.findall(response_text):
-        if phone not in candidate_phones:
-            violations.append({"type": "fabricated_phone_number", "severity": "hard", "detail": phone})
-            return False, 0.0, violations
-
-    # Hard: fabricated URL
-    for url in URL_REGEX.findall(response_text):
-        if not any(white in url for white in URL_WHITELIST):
-            violations.append({"type": "fabricated_url", "severity": "hard", "detail": url})
-            return False, 0.0, violations
-
-    # Soft: suspect proper nouns
-    for noun in PROPER_NOUN_REGEX.findall(response_text):
-        if noun not in candidate_names and noun.lower() not in DARIJA_COMMON_TERMS:
-            violations.append({"type": "suspect_proper_noun", "severity": "soft", "detail": noun})
-            score -= 0.05
-
-    return score >= 0.7, max(0.0, score), violations
 
 
 # -------------------------------------------------------------------
