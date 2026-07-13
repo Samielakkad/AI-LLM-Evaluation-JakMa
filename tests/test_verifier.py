@@ -11,6 +11,7 @@ CANDIDATES = [
         "trade": "plumber",
         "secondary_trades": [],
         "city": "Tangier",
+        "price_range": {"min": 200, "max": 300, "unit": "day"},
     }
 ]
 
@@ -82,6 +83,47 @@ class VerifyGroundingTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertAlmostEqual(score, 0.95)
         self.assertEqual(violations[0]["type"], "suspect_proper_noun")
+
+    def test_allows_point_and_range_prices_inside_baseline_envelope(self):
+        ok, score, violations = verify_grounding(
+            "Youssef: 200 MAD or 210-320 DH", ["worker-1"], CANDIDATES
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(score, 1.0)
+        self.assertEqual(violations, [])
+
+    def test_flags_low_high_and_comma_separated_prices(self):
+        ok, score, violations = verify_grounding(
+            "offers: 50 درهم and 50,000 MAD", ["worker-1"], CANDIDATES
+        )
+
+        self.assertTrue(ok)
+        self.assertAlmostEqual(score, 0.7)
+        self.assertEqual(
+            [violation["type"] for violation in violations],
+            ["price_outside_baseline", "price_outside_baseline"],
+        )
+        self.assertEqual(
+            [violation["evidence"] for violation in violations],
+            ["50 درهم", "50,000 MAD"],
+        )
+
+    def test_flags_range_when_one_endpoint_is_outside_baseline(self):
+        ok, score, violations = verify_grounding(
+            "range: 200-900 MAD", ["worker-1"], CANDIDATES
+        )
+
+        self.assertTrue(ok)
+        self.assertAlmostEqual(score, 0.85)
+        self.assertEqual(violations[0]["type"], "price_outside_baseline")
+
+    def test_flags_price_without_a_cited_candidate_baseline(self):
+        ok, score, violations = verify_grounding("price: 250 MAD", [], CANDIDATES)
+
+        self.assertTrue(ok)
+        self.assertAlmostEqual(score, 0.85)
+        self.assertEqual(violations[0]["type"], "price_outside_baseline")
 
 
 if __name__ == "__main__":

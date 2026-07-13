@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 
@@ -39,6 +40,34 @@ def _validate_candidate(raw_candidate: object, location: str) -> dict:
         raise CandidateDataError(f"{location}.phone must be a string when present")
     if phone is not None:
         candidate["phone"] = phone.strip()
+
+    price_range = candidate.get("price_range")
+    if not isinstance(price_range, dict):
+        raise CandidateDataError(f"{location}.price_range must be an object")
+    minimum = price_range.get("min")
+    maximum = price_range.get("max")
+    for field, value in (("min", minimum), ("max", maximum)):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise CandidateDataError(
+                f"{location}.price_range.{field} must be a number"
+            )
+        if value <= 0:
+            raise CandidateDataError(
+                f"{location}.price_range.{field} must be greater than zero"
+            )
+        if not math.isfinite(value):
+            raise CandidateDataError(
+                f"{location}.price_range.{field} must be finite"
+            )
+    if minimum > maximum:
+        raise CandidateDataError(
+            f"{location}.price_range.min must not exceed price_range.max"
+        )
+    unit = price_range.get("unit")
+    if not isinstance(unit, str) or not unit.strip():
+        raise CandidateDataError(
+            f"{location}.price_range.unit must be a non-empty string"
+        )
 
     return candidate
 

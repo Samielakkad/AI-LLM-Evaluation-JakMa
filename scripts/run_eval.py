@@ -129,7 +129,9 @@ def score_response(result: QueryResult, candidates: list[dict] = None) -> QueryR
     candidates = candidates or []
 
     # Factuality: did the verifier pass?
-    ok, _score, _viol = verify_grounding(result.response_text, result.cited_ids, candidates)
+    ok, _score, violations = verify_grounding(
+        result.response_text, result.cited_ids, candidates
+    )
     result.factuality = 1.0 if ok else 0.0
     result.verifier_passed = ok
 
@@ -157,8 +159,11 @@ def score_response(result: QueryResult, candidates: list[dict] = None) -> QueryR
     else:
         result.geographic = 1.0
 
-    # Price-fairness: did the verifier flag any price violations?
-    has_price_violation = any("price" in v.get("type", "") for v in [])
+    # Price-fairness: any out-of-baseline quote is a non-negotiable failure.
+    has_price_violation = any(
+        violation.get("type") == "price_outside_baseline"
+        for violation in violations
+    )
     result.price_fairness = 0.0 if has_price_violation else 1.0
 
     # Naturalness: stub — set to 0.8 baseline. Manual review for finer grain.

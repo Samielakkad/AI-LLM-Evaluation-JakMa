@@ -14,6 +14,7 @@ def candidate(candidate_id="worker-1", **overrides):
         "secondary_trades": [],
         "city": "Tangier",
         "phone": "0612345678",
+        "price_range": {"min": 200, "max": 300, "unit": "day"},
     }
     value.update(overrides)
     return value
@@ -28,7 +29,7 @@ class LoadCandidateSetsTests(unittest.TestCase):
 
     def test_loads_valid_per_query_candidates_and_ignores_extra_sets(self):
         payload = {
-            "q001": [candidate(price_range={"min": 200, "max": 300})],
+            "q001": [candidate()],
             "q-not-in-smoke-run": [],
         }
 
@@ -81,6 +82,36 @@ class LoadCandidateSetsTests(unittest.TestCase):
         with self.assertRaisesRegex(
             CandidateDataError, r"candidates\.q001\[0\]\.city"
         ):
+            self.load(payload, ["q001"])
+
+    def test_rejects_inverted_price_range(self):
+        payload = {
+            "q001": [
+                candidate(price_range={"min": 400, "max": 200, "unit": "day"})
+            ]
+        }
+
+        with self.assertRaisesRegex(CandidateDataError, "min must not exceed"):
+            self.load(payload, ["q001"])
+
+    def test_rejects_missing_price_unit(self):
+        payload = {
+            "q001": [candidate(price_range={"min": 200, "max": 300})]
+        }
+
+        with self.assertRaisesRegex(CandidateDataError, "unit must be"):
+            self.load(payload, ["q001"])
+
+    def test_rejects_non_finite_price_range(self):
+        payload = {
+            "q001": [
+                candidate(
+                    price_range={"min": 200, "max": float("nan"), "unit": "day"}
+                )
+            ]
+        }
+
+        with self.assertRaisesRegex(CandidateDataError, "max must be finite"):
             self.load(payload, ["q001"])
 
     def test_rejects_non_mapping_document(self):

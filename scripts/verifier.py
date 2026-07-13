@@ -9,6 +9,12 @@ from urllib.parse import urlsplit
 PHONE_REGEX = re.compile(r"\b0[567]\d{8}\b")
 URL_REGEX = re.compile(r"(?i)\b(?:https?://|whatsapp://)[^\s<>\"']+")
 PROPER_NOUN_REGEX = re.compile(r"\b[A-Z][a-z]{2,}\b")
+PRICE_REGEX = re.compile(
+    r"(?<!\d)(?P<low>\d{1,3}(?:,\d{3})+|\d{2,5})"
+    r"(?:\s*[-\u2013\u2014]\s*(?P<high>\d{1,3}(?:,\d{3})+|\d{2,5}))?"
+    r"\s*(?P<currency>MAD|DH|درهم)(?!\w)",
+    re.IGNORECASE,
+)
 
 ALLOWED_HTTP_HOSTS = frozenset({"jak.ma", "www.jak.ma", "wa.me"})
 ALLOWED_WHATSAPP_ACTIONS = frozenset({"send"})
@@ -34,6 +40,8 @@ DARIJA_COMMON_TERMS = {
 }
 
 _TRAILING_URL_PUNCTUATION = ".,!?;:)]}،؛"
+_MINIMUM_BASELINE_FACTOR = 0.5
+_MAXIMUM_BASELINE_FACTOR = 2.5
 
 
 def _is_allowed_url(raw_url: str) -> bool:
@@ -51,6 +59,46 @@ def _is_allowed_url(raw_url: str) -> bool:
     if scheme == "whatsapp":
         return host in ALLOWED_WHATSAPP_ACTIONS
     return False
+
+
+def _price_violations(
+    response_text: str,
+    cited_ids: list[str],
+    candidates: list[dict],
+) -> list[dict]:
+    candidates_by_id = {candidate["id"]: candidate for candidate in candidates}
+    cited_price_ranges = [
+        candidates_by_id[cited_id]["price_range"]
+        for cited_id in cited_ids
+        if cited_id in candidates_by_id
+    ]
+    violations = []
+
+    for match in PRICE_REGEX.finditer(response_text):
+        quoted_prices = [int(match.group("low").replace(",", ""))]
+        if match.group("high"):
+            quoted_prices.append(int(match.group("high").replace(",", "")))
+
+        grounded = any(
+            all(
+                price_range["min"] * _MINIMUM_BASELINE_FACTOR
+                <= quoted_price
+                <= price_range["max"] * _MAXIMUM_BASELINE_FACTOR
+                for quoted_price in quoted_prices
+            )
+            for price_range in cited_price_ranges
+        )
+        if not grounded:
+            violations.append(
+                {
+                    "type": "price_outside_baseline",
+                    "severity": "soft",
+                    "detail": "quoted price is outside every cited candidate baseline",
+                    "evidence": match.group(0),
+                }
+            )
+
+    return violations
 
 
 def verify_grounding(
@@ -112,6 +160,10 @@ def verify_grounding(
                 }
             )
             hard_failure = True
+
+    price_violations = _price_violations(response_text, cited_ids, candidates)
+    violations.extend(price_violations)
+    score -= 0.15 * len(price_violations)
 
     for noun in PROPER_NOUN_REGEX.findall(response_text):
         if noun not in candidate_names and noun.lower() not in DARIJA_COMMON_TERMS:
