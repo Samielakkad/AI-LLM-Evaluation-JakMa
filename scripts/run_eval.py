@@ -36,7 +36,12 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
-from verifier import verify_grounding
+if __package__:
+    from .candidate_data import CandidateDataError, load_candidate_sets
+    from .verifier import verify_grounding
+else:
+    from candidate_data import CandidateDataError, load_candidate_sets
+    from verifier import verify_grounding
 
 try:
     import httpx
@@ -181,6 +186,11 @@ def main():
     parser = argparse.ArgumentParser(description="Run jak.ma 5-dim eval against any OpenAI-compatible endpoint")
     parser.add_argument("--endpoint", required=True, help="The chat endpoint URL")
     parser.add_argument("--test-set", required=True, help="Path to JSONL test set")
+    parser.add_argument(
+        "--candidates",
+        required=True,
+        help="JSON object mapping each evaluated query ID to its candidate array",
+    )
     parser.add_argument("--output", default="results.json", help="Output JSON file")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of queries")
     args = parser.parse_args()
@@ -202,6 +212,13 @@ def main():
     if args.limit:
         queries = queries[:args.limit]
 
+    try:
+        candidate_sets = load_candidate_sets(
+            args.candidates, [query.id for query in queries]
+        )
+    except CandidateDataError as error:
+        parser.error(str(error))
+
     print(f"Running {len(queries)} queries against {args.endpoint}")
     print()
 
@@ -220,10 +237,7 @@ def main():
             results.append(q)
             continue
 
-        # Note: candidates are unknown without an admin endpoint exposing them.
-        # In production usage, the caller passes candidates from /api/admin/eval-candidates.
-        # For demonstration, scoring runs with empty candidates (factuality requires real candidates).
-        q = score_response(q, candidates=[])
+        q = score_response(q, candidates=candidate_sets[q.id])
         results.append(q)
 
     # Aggregate
