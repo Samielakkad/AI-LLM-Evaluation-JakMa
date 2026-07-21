@@ -132,6 +132,25 @@ class ParseEndpointResponseTests(unittest.TestCase):
         with self.assertRaisesRegex(ResponseParseError, "does not declare"):
             parse_endpoint_response("unmarked answer", "text/plain")
 
+    def test_rejects_empty_response_text_in_every_transport(self):
+        responses = (
+            ("<<WORKERS:worker-1>>", "text/plain"),
+            (
+                json.dumps(
+                    {"message_darija": " ", "workers_to_show": ["worker-1"]}
+                ),
+                "application/json",
+            ),
+            (
+                'data: {"message_darija":"","workers_to_show":["worker-1"]}\n\n',
+                "text/event-stream",
+            ),
+        )
+        for body, content_type in responses:
+            with self.subTest(content_type=content_type):
+                with self.assertRaisesRegex(ResponseParseError, "must not be empty"):
+                    parse_endpoint_response(body, content_type)
+
 
 class CallEndpointTests(unittest.TestCase):
     def test_uses_response_content_type_and_returns_parsed_contract(self):
