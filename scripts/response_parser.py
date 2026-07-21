@@ -24,7 +24,10 @@ class ParsedEndpointResponse:
 def _parse_worker_marker(text: str) -> tuple[str, Optional[list[str]]]:
     matches = list(WORKERS_MARKER.finditer(text))
     if not matches:
-        return text.strip(), None
+        response_text = text.strip()
+        if not response_text:
+            raise ResponseParseError("response text must not be empty")
+        return response_text, None
     if len(matches) > 1:
         raise ResponseParseError("response contains more than one WORKERS marker")
 
@@ -35,7 +38,10 @@ def _parse_worker_marker(text: str) -> tuple[str, Optional[list[str]]]:
     cited_ids = [value.strip() for value in marker.group(1).split(",") if value.strip()]
     if len(cited_ids) != len(set(cited_ids)):
         raise ResponseParseError("WORKERS marker contains duplicate worker IDs")
-    return text[: marker.start()].strip(), cited_ids
+    response_text = text[: marker.start()].strip()
+    if not response_text:
+        raise ResponseParseError("response text must not be empty")
+    return response_text, cited_ids
 
 
 def _extract_pass1(value: object) -> Optional[dict]:
