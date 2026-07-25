@@ -23,7 +23,7 @@ class ScoreResponseTests(unittest.TestCase):
             }
         ]
 
-        scored = score_response(result, candidates)
+        scored = score_response(result, candidates, naturalness_score=0.8)
 
         self.assertEqual(scored.factuality, 1.0)
         self.assertEqual(scored.trade_fit, 1.0)
@@ -50,10 +50,18 @@ class ScoreResponseTests(unittest.TestCase):
             }
         ]
 
-        scored = score_response(result, candidates)
+        scored = score_response(result, candidates, naturalness_score=0.8)
 
         self.assertEqual(scored.price_fairness, 0.0)
         self.assertEqual(scored.aggregate, 0.0)
+
+    def test_aggregate_is_not_reported_without_manual_naturalness(self):
+        result = QueryResult(id="q001", query="hello", expected={})
+
+        scored = score_response(result, [])
+
+        self.assertIsNone(scored.naturalness)
+        self.assertIsNone(scored.aggregate)
 
 
 if __name__ == "__main__":

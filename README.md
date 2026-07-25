@@ -1,159 +1,23 @@
-# AI + LLM Evaluation · jak-ma-eval-suite
+# JakMa Evaluation Suite
 
-> Evaluation methodology, rubric, and reproducible test harness for the **two-pass grounded retrieval system at [jak.ma](https://jak.ma)** — a live Darija marketplace with 1,996 verified workers across 12 trades and 11 Moroccan cities.
-
-[![Production](https://img.shields.io/badge/live-jak.ma-brightgreen)](https://jak.ma)
-[![Health](https://img.shields.io/badge/api%2Fhealth-grounded__retrieval%3Atrue-blue)](https://jak.ma/api/health)
-[![Workers](https://img.shields.io/badge/workers-1%2C996-orange)](https://jak.ma)
 [![CI](https://github.com/Samielakkad/AI-LLM-Evaluation-JakMa/actions/workflows/ci.yml/badge.svg)](https://github.com/Samielakkad/AI-LLM-Evaluation-JakMa/actions/workflows/ci.yml)
 
----
+Evaluation and verification tools for a grounded-retrieval response pipeline. The repository contains a five-dimension rubric, 52 public Darija/Arabizi query cases, endpoint-response parsers, candidate validation, and deterministic grounding checks.
 
-## What this repo is
+It does not contain private production candidates or evaluation logs, and it does not claim a current production score.
 
-The **eval suite** for jak.ma's production AI architecture — the exact rubric, prompt set, and verifier methodology used to release-gate every grounded-retrieval deployment to production.
+## What is included
 
-Start with [`RUBRIC.md`](RUBRIC.md) for the 5-dim eval methodology and [`DARIJA_QUERY_SET.md`](DARIJA_QUERY_SET.md) for the representative test prompts. `https://jak.ma/api/health` exposes the production flags that this suite evaluates against.
+| Part | Purpose |
+| --- | --- |
+| [`data/sample_queries.jsonl`](data/sample_queries.jsonl) | 52 public service-query cases with expected intent fields |
+| [`scripts/response_parser.py`](scripts/response_parser.py) | Parses documented JSON, SSE, and terminal worker markers |
+| [`scripts/candidate_data.py`](scripts/candidate_data.py) | Validates per-query candidate snapshots before scoring |
+| [`scripts/verifier.py`](scripts/verifier.py) | Checks cited IDs, phone numbers, URLs, names, and price baselines |
+| [`scripts/run_eval.py`](scripts/run_eval.py) | Calls an endpoint and writes per-query and aggregate output |
+| [`RUBRIC.md`](RUBRIC.md) | Defines factuality, naturalness, trade fit, price fairness, and geography |
 
-## What jak.ma's AI does
-
-Four shipped systems, all live, all evaluated by this suite:
-
-1. **Two-pass grounded retrieval** — Grok-3-mini classifies Darija query (Pass 1, JSON mode, 4s budget), MongoDB retrieves top-8 candidates, Grok generates response constrained to those candidates (Pass 2), verifier checks every cited ID before streaming. Latency: p50 < 6s, p95 < 15s.
-
-2. **AI price-fairness verifier** — Hard rules first (<40% or >250% of baseline = `wildly_off`), mid-range routes through Grok-3-mini with worker context, verdicts cached 24h. Gates worker registration.
-
-3. **Hybrid retrieval + semantic cache** — BM25 keyword pre-filter narrows search space, semantic cache cuts Grok API spend on repeat queries (~22% cache hit rate live).
-
-4. **Multimodal trade classification** (scaffolding) — Browser TF.js MobileNetV3 → Grok-2-Vision fallback. Sub-250ms p50 target on mid-tier Android.
-
-## Eval rubric (5 dimensions)
-
-| Dimension | What it measures | Pass bar |
-|---|---|---|
-| **Factuality** | Does the response only reference real workers (cited IDs exist in MongoDB)? | 1.0 required |
-| **Naturalness** | Is the Darija idiomatic, not transliterated MSA? | ≥ 0.8 |
-| **Trade-fit** | Does the recommended worker's trade match the parsed intent? | ≥ 0.9 |
-| **Price-fairness** | Are any mentioned prices within the rule-based baseline? | 1.0 required |
-| **Geographic correctness** | Is the city/zone match correct? | ≥ 0.9 |
-
-Aggregate score: factuality × price_fairness × weighted-sum-of-rest. Release deploys to production only if the held-out test set scores ≥ 0.92 aggregate.
-
-See [`RUBRIC.md`](RUBRIC.md) for the full scoring math.
-
-## Quickstart — run the eval against the live jak.ma endpoint
-
-```bash
-git clone https://github.com/Samielakkad/AI-LLM-Evaluation-JakMa.git
-cd AI-LLM-Evaluation-JakMa
-python -m pip install -r requirements.txt
-
-python scripts/run_eval.py \
-  --endpoint https://jak.ma/api/ai/chat \
-  --test-set data/sample_queries.jsonl \
-  --candidates /secure/path/candidates.json \
-  --output results.json
-```
-
-The candidate file is a JSON object keyed by test query ID. Every query being
-evaluated must have an entry; an empty array is valid when retrieval returned
-no workers. Candidate IDs must be unique within a query.
-
-```json
-{
-  "q001": [
-    {
-      "id": "worker-1",
-      "name": "Example Worker",
-      "trade": "بلومبي",
-      "secondary_trades": [],
-      "city": "طنجة",
-      "price_range": {"min": 210, "max": 320, "unit": "day"}
-    }
-  ]
-}
-```
-
-Candidate snapshots can contain contact data. Keep them outside the repository
-and pass their path at runtime.
-
-The endpoint may return the terminal `<<WORKERS:...>>` contract as plain text
-or SSE, or the structured JSON contract in `api/openapi.yaml`. Nested Pass 1
-objects are preserved without regex extraction. Conflicting or missing worker
-declarations are recorded as response errors rather than silently scored.
-
-The runner prints a summary and writes the per-query details to the requested
-UTF-8 JSON file. The historical May 2026 production baseline was:
-
-```
-=== jak.ma production eval ===
-Test set: 50 Darija queries (Arabic + Arabizi mix)
-Aggregate score: 0.94
-  Factuality:           1.00  ✓ (0 fabricated names in 50 queries)
-  Naturalness:          0.87  ✓
-  Trade-fit:            0.96  ✓
-  Price-fairness:       1.00  ✓
-  Geographic:           0.93  ✓
-Verifier pass rate:     98%   ✓
-Mean latency p50:       4.5s
-Mean latency p95:      12.0s
-```
-
-## How the verifier works
-
-After Pass 2 streams, before returning success:
-
-1. Parse cited IDs from the `<<WORKERS:id1,id2,id3>>` marker the model emits.
-2. Check each ID exists in the Pass 1 candidate set.
-3. Plausibility-check any prices mentioned against the worker's rule-based range.
-4. Flag suspect proper nouns (capitalized names not in candidate set).
-5. Return `{ok: bool, violations: [], score: 0.0-1.0}`.
-
-If `score < 0.7`: response is gated, fallback message served, event logged to `eval_logs` collection with `verdict: "failed_grounding"`.
-
-## Why two-pass + verifier (not just RAG)
-
-Standard RAG: retrieve docs → generate response using docs → hope the model didn't hallucinate.
-
-This system: classify → retrieve under hard structural constraints → generate with explicit ID-citation requirement → **verify cited IDs against retrieval before streaming**.
-
-The verifier is the architectural difference. Without it, "grounded retrieval" is a marketing phrase. With it, the system **cannot fabricate a worker name** — if it does, the verifier catches it, gates the response, and logs the failure.
-
-This matters for jak.ma specifically because a customer might call a phone number based on a recommendation. Hallucinated phone numbers are catastrophic. The verifier exists because the failure mode is unacceptable.
-
-## Cost projection
-
-| Component | Cost per 1k queries | Notes |
-|---|---|---|
-| Pass 1 (Grok-3-mini, JSON mode, ~300 tokens) | $0.024 | Skipped on BM25 pre-filter hits (~40%) |
-| Pass 2 (Grok-3-mini, ~600 tokens streaming) | $0.048 | Skipped on semantic cache hits (~22%) |
-| Verifier (deterministic, no Grok call) | $0.000 | Pure code |
-| **Effective per 1k queries** | **~$0.043** | After cache + pre-filter |
-
-At current jak.ma traffic (~5,000 chat queries/month), total AI cost: **~$0.22/month**. Below the noise floor of the $20/month total infra budget.
-
-## Repo structure
-
-```
-AI-LLM-Evaluation-JakMa/
-├── .github/workflows/ci.yml   # Python 3.10/3.13 lint + test gate
-├── README.md                  # this file
-├── RUBRIC.md                  # 5-dim eval methodology in depth
-├── DARIJA_QUERY_SET.md        # 50 representative Pass 1 + Pass 2 test prompts
-├── scripts/
-│   ├── run_eval.py            # CLI + endpoint client + aggregate scoring
-│   ├── candidate_data.py      # per-query candidate schema validation
-│   ├── response_parser.py     # JSON / SSE / plain-text contract parser
-│   └── verifier.py            # deterministic grounding checks
-├── tests/                     # offline unit and transport tests
-├── requirements.txt           # runtime dependencies
-├── requirements-dev.txt       # reproducible lint tooling
-├── pyproject.toml              # lint configuration
-├── LICENSE
-└── prompts/                    # Pass 1, Pass 2, and price prompts
-```
-
-Run the same checks as CI locally:
+## Run the offline checks
 
 ```bash
 python -m pip install -r requirements-dev.txt
@@ -161,33 +25,49 @@ ruff check scripts tests
 python -m unittest discover -s tests -v
 ```
 
-## Contributing
+The current suite has 34 offline tests. They cover data validation, transport parsing, scoring, and adversarial verifier cases without contacting a live endpoint.
 
-PRs welcome from anyone working on:
-- Low-resource dialect NLP
-- Grounded retrieval methodology
-- Verifier-gated generation
-- LLM evaluation methodology for production systems
+## Evaluate an endpoint
 
-For sensitive issues (security, PII), email `sam25@mails.tsinghua.edu.cn` directly.
+```bash
+python -m pip install -r requirements.txt
 
-## Citation
+python scripts/run_eval.py \
+  --endpoint https://example.com/api/chat \
+  --test-set data/sample_queries.jsonl \
+  --candidates /secure/path/candidates.json \
+  --output results.json
+```
 
-```bibtex
-@misc{elakkad2026jakma,
-  title = {jak.ma: A Live Two-Pass Grounded Retrieval System for Morocco's Informal Service Economy},
-  author = {El Akkad, Sami},
-  year = {2026},
-  howpublished = {Tsinghua SIGS MSc Technical Report v3},
-  url = {https://jak.ma}
+Candidate data is required because factuality, trade fit, geography, and price checks must compare a response with the records that were actually available for that query. Keep real names and contact details outside the repository.
+
+Naturalness needs a Darija-speaking reviewer. Without reviewer scores, the runner records `naturalness`, `aggregate`, and `passed_release_gate` as `null` rather than inventing a default score. To complete the rubric, provide a JSON object with one 0–1 score per evaluated query:
+
+```json
+{
+  "q001": 0.9,
+  "q002": 0.8
 }
 ```
 
+```bash
+python scripts/run_eval.py \
+  --endpoint https://example.com/api/chat \
+  --test-set data/sample_queries.jsonl \
+  --candidates /secure/path/candidates.json \
+  --naturalness-scores /secure/path/naturalness.json \
+  --output results.json
+```
+
+The reviewer file must contain every query included in the run. The output keeps the endpoint, per-query results, dimension values, verifier pass rate, and observed request latency so results can be audited later.
+
+## Evidence boundary
+
+- The public query file is a transparent regression set, not a hidden benchmark.
+- The offline tests prove parser and verifier behavior, not model quality.
+- Endpoint scores depend on the exact endpoint version, candidate snapshot, query set, reviewer scores, and run time.
+- Historical operational numbers are not presented as current results without the underlying output artifact.
+
 ## License
 
-All rights reserved. Public visibility grants review and reference access only;
-reuse requires the author's prior written permission. See [`LICENSE`](LICENSE).
-
----
-
-**Sami EL AKKAD** · Tsinghua SIGS AI MSc · sam25@mails.tsinghua.edu.cn
+All rights reserved. Public visibility grants review and reference access only; see [`LICENSE`](LICENSE).
