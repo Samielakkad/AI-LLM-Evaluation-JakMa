@@ -1,6 +1,9 @@
 # Evaluation Rubric — jak.ma Two-Pass Grounded Retrieval
 
-This rubric is used to gate every production deployment of jak.ma's AI architecture. A release ships only if the aggregate score on the held-out test set exceeds **0.92**.
+This document defines a proposed release rubric. The public repository does not
+show that every production deployment uses it. An aggregate is valid only when
+the run includes explicit native-Darija naturalness scores; the runner leaves
+the aggregate and release result unset when that manual review is missing.
 
 ---
 
@@ -71,7 +74,9 @@ aggregate = max(0, factuality × price_fairness × (
 
 The multiplicative factuality × price_fairness factor enforces the non-negotiable bar: if either is below 1.0, aggregate is 0. The remaining 4 dimensions trade off against each other.
 
-**Release gate:** aggregate ≥ 0.92 on a held-out test set of 50 representative Darija queries (see `DARIJA_QUERY_SET.md`).
+**Proposed release gate:** aggregate ≥ 0.92 on a versioned query set. The public
+sample is transparent rather than held out, so results must identify the exact
+query file, candidate snapshot, reviewer scores, endpoint version, and run time.
 
 ---
 
@@ -81,10 +86,8 @@ The verifier is the architectural safeguard. It runs after Pass 2 and before str
 
 Verifier pass rate is measured as: `passes / total_queries`. The target is ≥ 95% in production.
 
-Historical baselines:
-- May 2026 (post-grounded-retrieval rollout): 98%
-- Reference legacy handler (open Grok): 41%
-- Worst case in development: 71%
+No production verifier-rate artifact is committed here. Report a rate only with
+the generated result file and candidate snapshot used for that run.
 
 ---
 
@@ -103,6 +106,7 @@ python scripts/run_eval.py \
     --endpoint https://jak.ma/api/ai/chat \
     --test-set data/sample_queries.jsonl \
     --candidates /secure/path/candidates.json \
+    --naturalness-scores /secure/path/naturalness.json \
     --output results.json
 ```
 
@@ -110,18 +114,19 @@ Results format:
 ```json
 {
   "endpoint": "https://jak.ma/api/ai/chat",
-  "n_queries": 50,
-  "aggregate": 0.94,
+  "n_queries": 52,
+  "aggregate": null,
   "dimensions": {
     "factuality": 1.00,
-    "naturalness": 0.87,
-    "trade_fit": 0.96,
-    "price_fairness": 1.00,
-    "geographic": 0.93
+    "naturalness": null,
+    "trade_fit": 1.0,
+    "price_fairness": 1.0,
+    "geographic": 1.0
   },
-  "verifier_pass_rate": 0.98,
+  "verifier_pass_rate": 1.0,
   "latency": { "p50_ms": 4500, "p95_ms": 12000 },
-  "passed_release_gate": true
+  "manual_review_complete": false,
+  "passed_release_gate": null
 }
 ```
 

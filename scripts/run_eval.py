@@ -69,12 +69,12 @@ class QueryResult:
     error: Optional[str] = None
     # Per-dimension scores (filled by scorer)
     factuality: float = 0
-    naturalness: float = 0
+    naturalness: Optional[float] = None
     trade_fit: float = 0
     price_fairness: float = 0
     geographic: float = 0
     verifier_passed: bool = False
-    aggregate: float = 0
+    aggregate: Optional[float] = None
 
 
 # -------------------------------------------------------------------
@@ -131,7 +131,11 @@ def call_endpoint(
 # 5-dim scorer
 # -------------------------------------------------------------------
 
-def score_response(result: QueryResult, candidates: list[dict] = None) -> QueryResult:
+def score_response(
+    result: QueryResult,
+    candidates: list[dict] = None,
+    naturalness_score: Optional[float] = None,
+) -> QueryResult:
     """Scores against the 5-dim rubric. Some dimensions require human review
     (naturalness in particular). This automated pass scores what it can; flag
     the rest for manual review.
@@ -176,21 +180,43 @@ def score_response(result: QueryResult, candidates: list[dict] = None) -> QueryR
     )
     result.price_fairness = 0.0 if has_price_violation else 1.0
 
-    # Naturalness: stub — set to 0.8 baseline. Manual review for finer grain.
-    result.naturalness = 0.8
+    # Naturalness needs a Darija-speaking reviewer; never substitute a default.
+    if naturalness_score is not None and not 0 <= naturalness_score <= 1:
+        raise ValueError("naturalness_score must be between 0 and 1")
+    result.naturalness = naturalness_score
 
-    # Aggregate
-    result.aggregate = max(
-        0.0,
-        result.factuality * result.price_fairness * (
-            0.35 * result.trade_fit
-            + 0.30 * result.naturalness
-            + 0.20 * result.geographic
-            + 0.15 * (1.0 if result.verifier_passed else 0.0)
+    # The aggregate is incomplete until the manual dimension is supplied.
+    if result.naturalness is not None:
+        result.aggregate = max(
+            0.0,
+            result.factuality * result.price_fairness * (
+                0.35 * result.trade_fit
+                + 0.30 * result.naturalness
+                + 0.20 * result.geographic
+                + 0.15 * (1.0 if result.verifier_passed else 0.0)
+            )
         )
-    )
 
     return result
+
+
+def load_naturalness_scores(path: Optional[str], query_ids: list[str]) -> dict[str, float]:
+    """Load required manual scores from a JSON object keyed by query ID."""
+    if path is None:
+        return {}
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("naturalness scores must be a JSON object keyed by query ID")
+
+    scores = {}
+    for query_id in query_ids:
+        value = data.get(query_id)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"missing or invalid naturalness score for {query_id}")
+        if not 0 <= value <= 1:
+            raise ValueError(f"naturalness score for {query_id} must be between 0 and 1")
+        scores[query_id] = float(value)
+    return scores
 
 
 # -------------------------------------------------------------------
@@ -208,6 +234,10 @@ def main():
     )
     parser.add_argument("--output", default="results.json", help="Output JSON file")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of queries")
+    parser.add_argument(
+        "--naturalness-scores",
+        help="JSON object of manual 0-1 Darija naturalness scores keyed by query ID",
+    )
     args = parser.parse_args()
 
     test_path = Path(args.test_set)
@@ -226,6 +256,13 @@ def main():
 
     if args.limit:
         queries = queries[:args.limit]
+
+    try:
+        naturalness_scores = load_naturalness_scores(
+            args.naturalness_scores, [query.id for query in queries]
+        )
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        parser.error(str(error))
 
     try:
         candidate_sets = load_candidate_sets(
@@ -255,7 +292,11 @@ def main():
                 results.append(q)
                 continue
 
-            q = score_response(q, candidates=candidate_sets[q.id])
+            q = score_response(
+                q,
+                candidates=candidate_sets[q.id],
+                naturalness_score=naturalness_scores.get(q.id),
+            )
             results.append(q)
 
     # Aggregate
@@ -265,21 +306,30 @@ def main():
         sys.exit(1)
 
     factuality = statistics.mean(r.factuality for r in successful)
-    naturalness = statistics.mean(r.naturalness for r in successful)
+    manual_review_complete = all(r.naturalness is not None for r in successful)
+    naturalness = (
+        statistics.mean(r.naturalness for r in successful)
+        if manual_review_complete
+        else None
+    )
     trade_fit = statistics.mean(r.trade_fit for r in successful)
     price_fairness = statistics.mean(r.price_fairness for r in successful)
     geographic = statistics.mean(r.geographic for r in successful)
-    aggregate = statistics.mean(r.aggregate for r in successful)
+    aggregate = (
+        statistics.mean(r.aggregate for r in successful)
+        if manual_review_complete
+        else None
+    )
     verifier_pass_rate = sum(1 for r in successful if r.verifier_passed) / len(successful)
 
     summary = {
         "endpoint": args.endpoint,
         "n_queries": len(queries),
         "n_successful": len(successful),
-        "aggregate": round(aggregate, 3),
+        "aggregate": round(aggregate, 3) if aggregate is not None else None,
         "dimensions": {
             "factuality": round(factuality, 3),
-            "naturalness": round(naturalness, 3),
+            "naturalness": round(naturalness, 3) if naturalness is not None else None,
             "trade_fit": round(trade_fit, 3),
             "price_fairness": round(price_fairness, 3),
             "geographic": round(geographic, 3),
@@ -290,7 +340,8 @@ def main():
             "p95_ms": round(sorted(latencies)[int(len(latencies) * 0.95)], 1) if latencies else None,
             "mean_ms": round(statistics.mean(latencies), 1) if latencies else None,
         },
-        "passed_release_gate": aggregate >= 0.92,
+        "manual_review_complete": manual_review_complete,
+        "passed_release_gate": aggregate >= 0.92 if aggregate is not None else None,
         "results": [asdict(r) for r in results],
     }
 
@@ -301,13 +352,27 @@ def main():
     print("=== jak.ma 5-dim eval summary ===")
     print(f"  Aggregate:           {summary['aggregate']}")
     print(f"  Factuality:          {summary['dimensions']['factuality']}")
-    print(f"  Naturalness:         {summary['dimensions']['naturalness']}")
+    print(
+        "  Naturalness:         "
+        + (
+            str(summary["dimensions"]["naturalness"])
+            if manual_review_complete
+            else "not scored (manual review required)"
+        )
+    )
     print(f"  Trade-fit:           {summary['dimensions']['trade_fit']}")
     print(f"  Price-fairness:      {summary['dimensions']['price_fairness']}")
     print(f"  Geographic:          {summary['dimensions']['geographic']}")
     print(f"  Verifier pass rate:  {summary['verifier_pass_rate']}")
     print(f"  Latency p50/p95:     {summary['latency']['p50_ms']}ms / {summary['latency']['p95_ms']}ms")
-    print(f"  Release gate:        {'PASS' if summary['passed_release_gate'] else 'FAIL'}")
+    gate = (
+        "PASS"
+        if summary["passed_release_gate"] is True
+        else "FAIL"
+        if summary["passed_release_gate"] is False
+        else "NOT EVALUATED"
+    )
+    print(f"  Release gate:        {gate}")
     print()
     print(f"Detailed results written to: {args.output}")
 
